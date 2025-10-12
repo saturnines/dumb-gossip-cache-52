@@ -9,8 +9,17 @@ type Cache struct {
 	ml      *memberlist.Memberlist
 	opts    Options
 	storage *storage
-	gossip  *gossipHandler
+	gossip  gossipDelegate // ← Use interface
 	janitor *janitor
+}
+
+type gossipDelegate interface {
+	broadcast(GossipMessage)
+	NodeMeta(int) []byte
+	NotifyMsg([]byte)
+	GetBroadcasts(int, int) [][]byte
+	LocalState(bool) []byte
+	MergeRemoteState([]byte, bool)
 }
 
 func New(ml *memberlist.Memberlist, opts Options) *Cache {
@@ -20,6 +29,25 @@ func New(ml *memberlist.Memberlist, opts Options) *Cache {
 	if opts.SweepInterval <= 0 {
 		opts.SweepInterval = 5 * time.Second
 	}
+	// defaults for adaptive gossip if enabled
+	if opts.AdaptiveGossip {
+		if opts.DecayInterval <= 0 {
+			opts.DecayInterval = 1 * time.Second
+		}
+		if opts.GossipFloor <= 0 {
+			opts.GossipFloor = 30 * time.Second
+		}
+		// FIX #5: Set threshold defaults
+		if opts.HighRateThreshold <= 0 {
+			opts.HighRateThreshold = 50
+		}
+		if opts.MediumRateThreshold <= 0 {
+			opts.MediumRateThreshold = 10
+		}
+		if opts.LowRateThreshold <= 0 {
+			opts.LowRateThreshold = 1
+		}
+	}
 
 	c := &Cache{
 		ml:      ml,
@@ -27,7 +55,13 @@ func New(ml *memberlist.Memberlist, opts Options) *Cache {
 		storage: newStorage(),
 	}
 
-	c.gossip = newGossipHandler(c, ml, opts.RetransmitMult)
+	// NEW: Choose gossip handler based on options
+	if opts.AdaptiveGossip {
+		c.gossip = newAdaptiveGossipHandler(c, ml, opts.RetransmitMult, opts.DecayInterval, opts.GossipFloor)
+	} else {
+		c.gossip = newGossipHandler(c, ml, opts.RetransmitMult)
+	}
+
 	c.janitor = newJanitor(c.storage, opts.SweepInterval)
 	c.janitor.start()
 
@@ -36,6 +70,10 @@ func New(ml *memberlist.Memberlist, opts Options) *Cache {
 
 func (c *Cache) Close() {
 	c.janitor.stop()
+
+	if ag, ok := c.gossip.(*adaptiveGossipHandler); ok {
+		ag.stop()
+	}
 }
 
 // Public API
@@ -58,6 +96,7 @@ func (c *Cache) Set(key string, value []byte, ttl time.Duration) {
 			Version:   ver,
 			ExpireAt:  exp,
 			Tombstone: false,
+			OriginID:  c.opts.OriginID,
 		}
 	})
 
@@ -69,6 +108,17 @@ func (c *Cache) Set(key string, value []byte, ttl time.Duration) {
 		Tombstone: false,
 		OriginID:  c.opts.OriginID,
 	})
+}
+
+func (c *Cache) Get(key string) ([]byte, bool) {
+	entry, ok := c.storage.get(key)
+	if !ok || entry.Tombstone {
+		return nil, false
+	}
+	if isExpired(entry) {
+		return nil, false
+	}
+	return append([]byte(nil), entry.Value...), true
 }
 
 func (c *Cache) Delete(key string) {
@@ -84,6 +134,7 @@ func (c *Cache) Delete(key string) {
 		return &Entry{
 			Version:   ver,
 			Tombstone: true,
+			OriginID:  c.opts.OriginID,
 		}
 	})
 
@@ -102,13 +153,14 @@ func (c *Cache) applyGossip(msg GossipMessage) {
 		Version:   msg.Version,
 		ExpireAt:  msg.ExpireAt,
 		Tombstone: msg.Tombstone,
+		OriginID:  msg.OriginID,
 	}
 
 	c.storage.compareAndSet(msg.Key, newEntry, func(existing *Entry) bool {
 		if existing == nil {
 			return true
 		}
-		return isNewer(msg, existing, c.opts.OriginID)
+		return isNewer(msg, existing)
 	})
 }
 
@@ -134,16 +186,15 @@ func (c *Cache) MergeRemoteState(buf []byte, join bool) {
 }
 
 // Helper functions
-func isNewer(msg GossipMessage, cur *Entry, localOrigin string) bool {
+func isNewer(msg GossipMessage, cur *Entry) bool {
 	if msg.Version != cur.Version {
 		return msg.Version > cur.Version
 	}
-	// lexicographically lowest OriginID WINS (This will not work currently will fix later)
-	// I think I need to store originID in entry..
-	if msg.OriginID == "" || localOrigin == "" {
+	// lexicographically lowest OriginID wins
+	if msg.OriginID == "" || cur.OriginID == "" {
 		return false
 	}
-	return msg.OriginID < localOrigin
+	return msg.OriginID < cur.OriginID
 }
 
 func isExpired(e *Entry) bool {

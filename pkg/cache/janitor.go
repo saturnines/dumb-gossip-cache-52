@@ -5,7 +5,7 @@ import "time"
 type janitor struct {
 	interval time.Duration
 	storage  *storage
-	stop     chan struct{} // note may need to rename
+	stopCh   chan struct{} // note may need to rename
 }
 
 func newJanitor(storage *storage, interval time.Duration) *janitor {
@@ -15,7 +15,7 @@ func newJanitor(storage *storage, interval time.Duration) *janitor {
 	return &janitor{
 		interval: interval,
 		storage:  storage,
-		stop:     make(chan struct{}),
+		stopCh:   make(chan struct{}),
 	}
 }
 
@@ -24,7 +24,7 @@ func (j *janitor) start() {
 }
 
 func (j *janitor) stop() {
-	close(j.stop)
+	close(j.stopCh)
 }
 
 func (j *janitor) run() {
@@ -35,7 +35,7 @@ func (j *janitor) run() {
 		select {
 		case <-ticker.C:
 			j.sweep()
-		case <-j.stop:
+		case <-j.stopCh:
 			return
 		}
 	}

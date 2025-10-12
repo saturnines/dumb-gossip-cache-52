@@ -64,7 +64,7 @@ func (g *gossipHandler) MergeRemoteState(buf []byte, join bool) {
 			Version:   e.Version,
 			ExpireAt:  e.ExpireAt,
 			Tombstone: e.Tombstone,
-			OriginID:  g.cache.opts.OriginID,
+			OriginID:  e.OriginID, // CHANGED: Use e.OriginID, not g.cache.opts.OriginID
 		})
 	}
 }
