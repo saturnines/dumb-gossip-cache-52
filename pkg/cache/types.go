@@ -10,6 +10,7 @@ type Entry struct {
 	Version   uint64    // last right wins prim clock
 	ExpireAt  time.Time // zero default = no ttl
 	Tombstone bool      // true == deleted
+	OriginID  string    // Comparison for tiebreaker
 }
 
 // GossipMessage is the wire format.
