@@ -52,7 +52,6 @@ func (s *storage) compareAndSet(key string, entry *Entry, compareFn func(*Entry)
 	return false
 }
 
-// NEW: Atomic read-modify-write
 func (s *storage) update(key string, updateFn func(*Entry) *Entry) *Entry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
