@@ -145,16 +145,15 @@ func (c *Cache) MergeRemoteState(buf []byte, join bool) {
 }
 
 // Helper functions
-func isNewer(msg GossipMessage, cur *Entry, localOrigin string) bool {
+func isNewer(msg GossipMessage, cur *Entry) bool {
 	if msg.Version != cur.Version {
 		return msg.Version > cur.Version
 	}
-	// lexicographically lowest OriginID WINS (This will not work currently will fix later)
-	// I think I need to store originID in entry..
-	if msg.OriginID == "" || localOrigin == "" {
+	// lexicographically lowest OriginID wins
+	if msg.OriginID == "" || cur.OriginID == "" {
 		return false
 	}
-	return msg.OriginID < localOrigin
+	return msg.OriginID < cur.OriginID
 }
 
 func isExpired(e *Entry) bool {
