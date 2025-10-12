@@ -71,6 +71,17 @@ func (c *Cache) Set(key string, value []byte, ttl time.Duration) {
 	})
 }
 
+func (c *Cache) Get(key string) ([]byte, bool) {
+	entry, ok := c.storage.get(key)
+	if !ok || entry.Tombstone {
+		return nil, false
+	}
+	if isExpired(entry) {
+		return nil, false
+	}
+	return append([]byte(nil), entry.Value...), true
+}
+
 func (c *Cache) Delete(key string) {
 	now := time.Now()
 	baseVer := uint64(now.UnixNano())
