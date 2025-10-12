@@ -25,12 +25,17 @@ type GossipMessage struct {
 }
 
 type Options struct {
-	//tie breaking.
-	OriginID string
-
-	// Retransmit multiplier.
+	OriginID       string
 	RetransmitMult int
+	SweepInterval  time.Duration
 
-	// Janitor runs every SweepInterval to drop expired entries.
-	SweepInterval time.Duration
+	// Adaptive gossip options
+	AdaptiveGossip bool
+	DecayInterval  time.Duration
+	GossipFloor    time.Duration
+
+	// Explicit rate thresholds
+	HighRateThreshold   int64 // Messages/sec for aggressive gossip (default 50)
+	MediumRateThreshold int64 // Messages/sec for normal gossip (default 10)
+	LowRateThreshold    int64 // Messages/sec for probabilistic gossip (default 1)
 }
