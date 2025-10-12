@@ -58,6 +58,7 @@ func (c *Cache) Set(key string, value []byte, ttl time.Duration) {
 			Version:   ver,
 			ExpireAt:  exp,
 			Tombstone: false,
+			OriginID:  c.opts.OriginID,
 		}
 	})
 
@@ -95,6 +96,7 @@ func (c *Cache) Delete(key string) {
 		return &Entry{
 			Version:   ver,
 			Tombstone: true,
+			OriginID:  c.opts.OriginID,
 		}
 	})
 
@@ -113,6 +115,7 @@ func (c *Cache) applyGossip(msg GossipMessage) {
 		Version:   msg.Version,
 		ExpireAt:  msg.ExpireAt,
 		Tombstone: msg.Tombstone,
+		OriginID:  msg.OriginID,
 	}
 
 	c.storage.compareAndSet(msg.Key, newEntry, func(existing *Entry) bool {
