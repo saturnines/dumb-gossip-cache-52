@@ -19,12 +19,12 @@ type GossipMessage struct {
 	Version   uint64
 	ExpireAt  time.Time
 	Tombstone bool
-	// Tie break when versions collide
+	// Tie-break when versions collide
 	OriginID string // stable node ID  UUID or addr
 }
 
 type Options struct {
-	//This is used for tie breaking.
+	//tie breaking.
 	OriginID string
 
 	// Retransmit multiplier.
