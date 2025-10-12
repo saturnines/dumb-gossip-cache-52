@@ -119,7 +119,7 @@ func (c *Cache) applyGossip(msg GossipMessage) {
 		if existing == nil {
 			return true
 		}
-		return isNewer(msg, existing, c.opts.OriginID)
+		return isNewer(msg, existing)
 	})
 }
 
