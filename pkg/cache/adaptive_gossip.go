@@ -52,7 +52,7 @@ func newAdaptiveGossipHandler(c *Cache, ml *memberlist.Memberlist, retransmitMul
 	return g
 }
 
-func (g *adaptiveGossipHandler) stop() {
+func (g *adaptiveGossipHandler) Close() {
 	close(g.stopDecay)
 }
 
@@ -170,7 +170,7 @@ func (g *adaptiveGossipHandler) MergeRemoteState(buf []byte, join bool) {
 			Version:   e.Version,
 			ExpireAt:  e.ExpireAt,
 			Tombstone: e.Tombstone,
-			OriginID:  e.OriginID, // Use the stored origin, not local
+			OriginID:  e.OriginID, // stored origin
 		})
 	}
 }
