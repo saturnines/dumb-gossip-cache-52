@@ -16,8 +16,8 @@ type adaptiveGossipHandler struct {
 
 	// gossip state
 	writeRate  atomic.Int64
-	lastWrite  atomic.Int64
-	lastGossip atomic.Int64
+	lastWrite  atomic.Value
+	lastGossip atomic.Value
 
 	decayInterval time.Duration
 	gossipFloor   time.Duration
@@ -52,13 +52,13 @@ func newAdaptiveGossipHandler(c *Cache, ml *memberlist.Memberlist, retransmitMul
 	return g
 }
 
-func (g *adaptiveGossipHandler) stop() {
+func (g *adaptiveGossipHandler) Close() {
 	close(g.stopDecay)
 }
 
 func (g *adaptiveGossipHandler) recordWrite() {
 	g.writeRate.Add(100) // Bump rate on write
-	g.lastWrite.Store(time.Now().UnixNano())
+	g.lastWrite.Store(time.Now())
 }
 
 func (g *adaptiveGossipHandler) decayLoop() {
@@ -105,13 +105,16 @@ func (g *adaptiveGossipHandler) NotifyMsg(b []byte) {
 func (g *adaptiveGossipHandler) GetBroadcasts(overhead, limit int) [][]byte {
 	// This entire thing is diabolical, I'm not sure if my math is right
 	rate := g.writeRate.Load()
-	now := time.Now().UnixNano()
-	lastGossip := g.lastGossip.Load()
 
-	// FLOOR: Always gossip at least once per gossipFloor duration
-	if now-lastGossip >= g.gossipFloor.Nanoseconds() {
-		g.lastGossip.Store(now)
-		// Bound the limit to prevent unbounded queue growth
+	// Load last gossip time safely
+	var lastGossip time.Time
+	if v := g.lastGossip.Load(); v != nil {
+		lastGossip, _ = v.(time.Time)
+	}
+
+	//  allow a gossip if enough time passed
+	if lastGossip.IsZero() || time.Since(lastGossip) >= g.gossipFloor {
+		g.lastGossip.Store(time.Now())
 		n := limit / 2
 		if n < 1 {
 			n = 1
@@ -121,14 +124,14 @@ func (g *adaptiveGossipHandler) GetBroadcasts(overhead, limit int) [][]byte {
 
 	// Adaptive gossip based on write rate
 	if rate > g.highRate {
-		g.lastGossip.Store(now)
+		g.lastGossip.Store(time.Now())
 		n := limit / 2
 		if n < 1 {
 			n = 1
 		}
 		return g.broadcasts.GetBroadcasts(overhead, n)
 	} else if rate > g.mediumRate {
-		g.lastGossip.Store(now)
+		g.lastGossip.Store(time.Now())
 		n := limit / 4
 		if n < 1 {
 			n = 1
@@ -136,7 +139,7 @@ func (g *adaptiveGossipHandler) GetBroadcasts(overhead, limit int) [][]byte {
 		return g.broadcasts.GetBroadcasts(overhead, n)
 	} else if rate > g.lowRate {
 		if g.rng.Intn(100) < 40 {
-			g.lastGossip.Store(now)
+			g.lastGossip.Store(time.Now())
 			n := limit / 2
 			if n < 1 {
 				n = 1
@@ -167,7 +170,7 @@ func (g *adaptiveGossipHandler) MergeRemoteState(buf []byte, join bool) {
 			Version:   e.Version,
 			ExpireAt:  e.ExpireAt,
 			Tombstone: e.Tombstone,
-			OriginID:  e.OriginID, // Use the stored origin, not local
+			OriginID:  e.OriginID, // stored origin
 		})
 	}
 }
