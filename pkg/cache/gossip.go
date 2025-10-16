@@ -28,6 +28,11 @@ func (g *gossipHandler) broadcast(msg GossipMessage) {
 	g.broadcasts.QueueBroadcast(&broadcast{msg: buf})
 }
 
+// Close implements the gossipDelegate interface
+func (g *gossipHandler) Close() {
+	// Standard gossip handler has no resources to clean up
+}
+
 // Memberlist Delegate methods
 func (g *gossipHandler) NodeMeta(limit int) []byte {
 	return nil
@@ -64,7 +69,7 @@ func (g *gossipHandler) MergeRemoteState(buf []byte, join bool) {
 			Version:   e.Version,
 			ExpireAt:  e.ExpireAt,
 			Tombstone: e.Tombstone,
-			OriginID:  e.OriginID, // CHANGED: Use e.OriginID, not g.cache.opts.OriginID
+			OriginID:  e.OriginID, // Use e.OriginID, not g.cache.opts.OriginID
 		})
 	}
 }
