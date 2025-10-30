@@ -8,7 +8,6 @@ Why not?
 
 ## What it does
 
-A lightweight cache that uses gossip protocol to replicate entries across nodes. Each node maintains a full copy of the cache, making reads always local and fast. I just needed this for a project I'm working on. :)
-
+it teach me about gossip protocols lol
 
 
